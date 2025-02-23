@@ -17,21 +17,13 @@ pub(crate) trait CConfigInterface: IKnown {
 #[repr(C)]
 pub(crate) struct VTable {
   pub iknown: IKnownVTable,
-  load: LoadFn,
-  save: SaveFn,
-  get_string: GetStringFn,
-  get_int: GetIntFn,
-  set_string: SetStringFn,
-  set_int: SetIntFn,
+  load: unsafe fn(this: *mut c_void, sz_file_name: *const c_char) -> c_int,
+  save: unsafe fn(this: *mut c_void, sz_file_name: *const c_char) -> c_int,
+  get_string: unsafe fn(this: *mut c_void, sz_section: *const c_char, sz_entry: *const c_char, sz_default: *const c_char) -> *const c_char,
+  get_int: unsafe fn(this: *mut c_void, sz_section: *const c_char, sz_entry: *const c_char, i_default: c_int) -> c_int,
+  set_string: unsafe fn(this: *mut c_void, sz_section: *const c_char, sz_entry: *const c_char, sz_value: *const c_char) -> c_int,
+  set_int: unsafe fn(this: *mut c_void, sz_section: *const c_char, sz_entry: *const c_char, i_value: c_int) -> c_int,
 }
-
-type LoadFn = unsafe fn(this: *mut c_void, sz_file_name: *const c_char) -> c_int;
-type SaveFn = unsafe fn(this: *mut c_void, sz_file_name: *const c_char) -> c_int;
-type GetStringFn =
-  unsafe fn(this: *mut c_void, sz_section: *const c_char, sz_entry: *const c_char, sz_default: *const c_char) -> *const c_char;
-type GetIntFn = unsafe fn(this: *mut c_void, sz_section: *const c_char, sz_entry: *const c_char, i_default: c_int) -> c_int;
-type SetStringFn = unsafe fn(this: *mut c_void, sz_section: *const c_char, sz_entry: *const c_char, sz_value: *const c_char) -> c_int;
-type SetIntFn = unsafe fn(this: *mut c_void, sz_section: *const c_char, sz_entry: *const c_char, i_value: c_int) -> c_int;
 
 #[repr(C)]
 pub(crate) struct CConfigInterfaceRust {
@@ -114,6 +106,11 @@ impl Config {
 
 #[napi]
 impl Config {
+  /**
+   * 从文件加载
+   * @param szFileName 文件名，格式类似ini，具体参考开发包示例
+   * @return 返回0表示成功，否则失败
+   */
   #[napi]
   pub fn load(&self, file_name: String) -> Result<i32> {
     let config = self.check_ptr()?;
@@ -121,7 +118,25 @@ impl Config {
 
     unsafe { Ok(config.load(c_file_name.as_ptr())) }
   }
+  /**
+   * 保存到文件
+   * @param szFileName 文件名
+   * @return 返回0表示成功，否则失败
+   */
+  #[napi]
+  pub fn save(&self, file_name: String) -> Result<i32> {
+    let config = self.check_ptr()?;
+    let c_file_name = Self::to_c_string(file_name, "filename")?;
 
+    unsafe { Ok(config.save(c_file_name.as_ptr())) }
+  }
+  /**
+   * 取字符串值
+   * @param szSection 节名
+   * @param szEntry   变量名
+   * @param szDefault 缺省值
+   * @return 字符串值，没有找到时返回szDefault
+   */
   #[napi]
   pub fn get_string(&self, section: String, entry: String, default: String) -> Result<String> {
     let config = self.check_ptr()?;
@@ -142,7 +157,13 @@ impl Config {
         .map(String::from)
     }
   }
-
+  /**
+   * 取整数值
+   * @param szSection 节名
+   * @param szEntry   变量名
+   * @param iDefault  缺省值
+   * @return 整数值，没有找到时返回iDefault
+   */
   #[napi]
   pub fn get_int(&self, section: String, entry: String, default: i32) -> Result<i32> {
     let config = self.check_ptr()?;
@@ -151,7 +172,13 @@ impl Config {
 
     unsafe { Ok(config.get_int(c_section.as_ptr(), c_entry.as_ptr(), default)) }
   }
-
+  /**
+   * 设置字符串值
+   * @param szSection 节名
+   * @param szEntry   变量名
+   * @param szValue   值
+   * @return 0表示成功，否则失败
+   */
   #[napi]
   pub fn set_string(&self, section: String, entry: String, value: String) -> Result<i32> {
     let config = self.check_ptr()?;
@@ -161,7 +188,13 @@ impl Config {
 
     unsafe { Ok(config.set_string(c_section.as_ptr(), c_entry.as_ptr(), c_value.as_ptr())) }
   }
-
+  /**
+   * 设置整数值
+   * @param szSection 节名
+   * @param szEntry   变量名
+   * @param iValue    值
+   * @return 0表示成功，否则失败
+   */
   #[napi]
   pub fn set_int(&self, section: String, entry: String, value: i32) -> Result<i32> {
     let config = self.check_ptr()?;
@@ -169,14 +202,6 @@ impl Config {
     let c_entry = Self::to_c_string(entry, "entry")?;
 
     unsafe { Ok(config.set_int(c_section.as_ptr(), c_entry.as_ptr(), value)) }
-  }
-
-  #[napi]
-  pub fn save(&self, file_name: String) -> Result<i32> {
-    let config = self.check_ptr()?;
-    let c_file_name = Self::to_c_string(file_name, "filename")?;
-
-    unsafe { Ok(config.save(c_file_name.as_ptr())) }
   }
 }
 
