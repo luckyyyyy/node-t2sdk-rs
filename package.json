@@ -20,7 +20,7 @@
   },
   "scripts": {
     "prepare": "npm run build",
-    "build": "napi build --release",
+    "build": "napi build",
     "build:debug": "napi build --platform",
     "test": "node demo/test.js"
   }
